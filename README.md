@@ -11,7 +11,9 @@ School Bus Safety & Monitoring System
 Το σύστημα αποτελείται από τρία επίπεδα:
 
 1. Vehicle Layer (Edge): Η συσκευή στο λεωφορείο που συλλέγει δεδομένα.
+
 2. Server Layer: Ο κεντρικός διακομιστής που επεξεργάζεται τα δεδομένα μέσω MQTT.
+
 3.Application Layer: Web Dashboard για τη διεύθυνση του σχολείου (Admin) και τους γονείς.
 
 Δυνατότητες (Features)
@@ -26,7 +28,7 @@ Live Video Stream: Μετάδοση εικόνας από την καμπίνα 
 
 Υλικό (Hardware)
 Το σύστημα βασίζεται στον μικροελεγκτή FireBeetle 2 ESP32-S3.
-Εξάρτημα	Περιγραφή
+
 MCU	
 DFRobot FireBeetle 2 ESP32-S3 (με κάμερα OV2640) 
 
@@ -53,18 +55,29 @@ Power
 DFRobot AXP313A (Power Management)
 
 Συνδεσμολογία (Pinout)
+
 I2C (SDA)	Pin 1	Για Accelerometer & LCD
+
 I2C (SCL)	Pin 2	Για Accelerometer & LCD
+
 GPS RX	Pin 12	
+
 GPS TX	Pin 13	
+
 MQ-3 Sensor	Pin 10	Analog Input
+
 DHT11	Pin 14	
+
 Red LED	Pin 3	Ένδειξη Συναγερμού
+
 Green LED	Pin 38	Ένδειξη Ομαλής Λειτουργίας
+
 Buzzer	Pin 18	
+
 Button	Pin 9	Ακύρωση Συναγερμού (Pull-up)
 
 Λογισμικό & Βιβλιοθήκες (Software)
+
 Ο κώδικας έχει γραφτεί σε C++ (Arduino Framework) και χρησιμοποιεί τις παρακάτω βιβλιοθήκες :
 
 
@@ -85,9 +98,13 @@ DFRobot_AXP313A.h (για διαχείριση ενέργειας)
 Ρυθμίσεις (Configuration)
 
 const char* ssid = "YOUR_WIFI_SSID";
+
 const char* password = "YOUR_WIFI_PASSWORD";
+
 const char* MQTT_HOST = "YOUR_MQTT_BROKER_IP";
+
 const uint16_t MQTT_PORT = 1884;
+
 const char* BUS_ID = "bus01";
 
 Εγκατάσταση & Λειτουργία
