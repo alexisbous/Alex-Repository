@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Bus Fleet Monitor</title>
+    
+    <!-- Leaflet CSS & JS (Χάρτης) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #f39c12;
+            --bg: #ecf0f1;
+            --card-bg: #fff;
+            --text: #333;
+            --danger: #c0392b;
+            --success: #27ae60;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 0; color: var(--text); }
+        
+        .hidden { display: none !important; }
+        .flex-center { display: flex; justify-content: center; align-items: center; }
+        
+        /* Login & Selection Styles */
+        #login-section, #fleet-section { height: 100vh; background: linear-gradient(135deg, var(--primary), #3498db); }
+        .centered-card { background: white; padding: 40px; border-radius: 15px; text-align: center; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        
+        /* Bus List Styles */
+        .bus-list { list-style: none; padding: 0; margin-top: 20px; }
+        .bus-item { 
+            background: #f8f9fa; border: 1px solid #ddd; padding: 15px; margin: 10px 0; 
+            border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; 
+            align-items: center; transition: 0.2s; font-weight: bold; color: var(--primary);
+        }
+        .bus-item:hover { background: #e9ecef; transform: translateX(5px); border-left: 5px solid var(--accent); }
+        .status-dot { height: 12px; width: 12px; background-color: #bbb; border-radius: 50%; display: inline-block; }
+        .online { background-color: #2ecc71; box-shadow: 0 0 5px #2ecc71; }
+        .sim { background-color: #3498db; }
+
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { background: var(--accent); color: white; border: none; padding: 12px 25px; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%; margin-top: 10px; transition: 0.3s; }
+        button:hover { filter: brightness(90%); }
+        button.stop-btn { background: var(--danger); }
+
+        /* Dashboard Styles */
+        #dashboard { padding: 20px; max-width: 1400px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--primary); color: white; padding: 15px 20px; border-radius: 10px; }
+        
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+        @media (max-width: 1000px) { .dashboard-grid { grid-template-columns: 1fr; } }
+
+        .camera-container { background: black; border-radius: 10px; overflow: hidden; aspect-ratio: 4/3; position: relative; }
+        #camera-stream { width: 100%; height: 100%; object-fit: contain; display: none; }
+        
+        #map { height: 400px; width: 100%; border-radius: 10px; z-index: 1; }
+        .gps-status { position: absolute; bottom: 10px; left: 10px; background: rgba(255,255,255,0.9); padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 999; font-weight: bold; border: 1px solid #ccc; }
+
+        .history-box { background: white; padding: 15px; border-radius: 10px; height: 400px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .history-box h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .log-entry { padding: 8px; border-bottom: 1px solid #eee; font-size: 13px; }
+        .type-danger { color: var(--danger); font-weight: bold; background-color: #fadbd8; }
+        .type-warn { color: #d35400; font-weight: bold; background-color: #fdebd0; }
+        .type-info { color: #2980b9; background-color: #ebf5fb; border-left: 4px solid #2980b9; }
+
+        .sensors-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .card h3 { margin: 0 0 10px 0; color: #7f8c8d; font-size: 14px; text-transform: uppercase; }
+        .card .value { font-size: 28px; font-weight: bold; color: var(--primary); }
+        .card .unit { font-size: 14px; color: #95a5a6; display: block; margin-top: 5px;}
+
+        .alert-box { padding: 15px; margin-bottom: 20px; color: white; border-radius: 5px; font-weight: bold; text-align: center; grid-column: 1 / -1;}
+        .red { background: var(--danger); animation: pulse 1s infinite; }
+        .green { background: var(--success); }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+
+        #popup-modal { position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
+        .modal-content { background: white; padding: 30px; border-radius: 15px; text-align: center; width: 300px; border-top: 10px solid var(--danger); animation: slideDown 0.3s; }
+        @keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <!-- 1. LOGIN SCREEN -->
+    <div id="login-section" class="flex-center">
+        <div class="centered-card">
+            <h2>Bus Monitor System</h2>
+            <input id="username" placeholder="Όνομα χρήστη">
+            <input id="password" type="password" placeholder="Κωδικός">
+            <button onclick="login()">Είσοδος</button>
+        </div>
+    </div>
+
+    <!-- 2. FLEET SELECTION (ADMIN ONLY) -->
+    <div id="fleet-section" class="flex-center hidden">
+        <div class="centered-card">
+            <h2>Select system</h2>
+            <p style="color:#eee; font-size:14px;">Επιλέξτε λεωφορείο για παρακολούθηση</p>
+            <ul class="bus-list">
+                <li class="bus-item" onclick="selectBus('bus01')">
+                    <span>Bus 01 </span>
+                    <span class="status-dot online" title="Online"></span>
+                </li>
+                <li class="bus-item" onclick="selectBus('bus02')">
+                    <span>Bus 02</span>
+                    <span class="status-dot sim" title="Simulated"></span>
+                </li>
+                <li class="bus-item" onclick="selectBus('bus03')">
+                    <span>Bus 03</span>
+                    <span class="status-dot sim" title="Simulated"></span>
+                </li>
+            </ul>
+            <button style="background: #7f8c8d; margin-top:20px;" onclick="logout()">Αποσύνδεση</button>
+        </div>
+    </div>
+
+    <!-- 3. DASHBOARD -->
+    <div id="dashboard" class="hidden">
+        <header>
+            <div style="display:flex; gap:15px; align-items:center;">
+                <!-- Κουμπί Πίσω ΜΟΝΟ για Admin -->
+                <button id="back-btn" style="width:auto; padding:5px 15px; margin:0; display:none;" onclick="goBack()">⬅ Λίστα</button>
+                <h2 style="margin:0;">Monitor: <span id="bus-label" style="color:var(--accent);">Live Bus 01</span></h2>
+            </div>
+            <div style="text-align:right;">
+                <span id="user-role" style="font-size:12px; display:block; opacity:0.8;"></span>
+                <button style="width:auto; background:#c0392b; padding:5px 15px; margin-top:5px;" onclick="logout()">Έξοδος</button>
+            </div>
+        </header>
+
+        <!-- Camera Controls -->
+        <div style="background:white; padding:15px; border-radius:10px; margin-bottom:20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <label><b>IP Κάμερας:</b></label>
+            <input type="text" id="esp-ip" value="192.168.0.121" style="width:140px; margin:0; padding:8px;">
+            <button style="width:auto; margin:0;" onclick="startCamera()">Εκκίνηση</button>
+            <button class="stop-btn" style="width:auto; margin:0;" onclick="stopCamera()">Διακοπή</button>
+            <span id="connection-status" style="margin-left:auto; font-weight:bold; color:red;">Αναμονή...</span>
+        </div>
+
+        <div id="alerts"></div>
+
+        <div class="dashboard-grid">
+            <!-- Left: Camera -->
+            <div class="camera-container">
+                <img id="camera-stream" src="" alt="Stream Off" onerror="this.style.display='none'">
+                <div id="cam-placeholder" style="color:white; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center;">
+                    <span style="font-size:40px;">📷</span><br>Η κάμερα είναι κλειστή
+                </div>
+            </div>
+
+            <!-- Middle: Map -->
+            <div style="position: relative;">
+                <div id="map"></div>
+                <div id="gps-status" class="gps-status" style="color: red;">GPS: Αναμονή...</div>
+            </div>
+
+            <!-- Right: History -->
+            <div class="history-box">
+                <h3>System log</h3>
+                <div id="log-list">
+                    <div class="log-entry" style="color:#999; text-align:center;">Δεν υπάρχουν συμβάντα</div>
+                </div>
+            </div>
+
+            <!-- Bottom: Sensors -->
+            <div class="sensors-row">
+                <div class="card"><h3>Temperature</h3><span class="value" id="temp">-</span> <span class="unit">°C</span></div>
+                <div class="card"><h3>Humidity</h3><span class="value" id="hum">-</span> <span class="unit">%</span></div>
+                
+                <!-- MQ-3 Επεξήγηση -->
+                <div class="card">
+                    <h3>Air Quality</h3>
+                    <span class="value" id="mq3">-</span> 
+                    <span class="unit" id="mq3-text">Επίπεδο (Raw)</span>
+                </div>
+                
+                <div class="card"><h3>Tilt</h3><span class="value" id="tilt">-</span> <span class="unit">Μοίρες (°)</span></div>
+                <div class="card"><h3>Speed</h3><span class="value" id="speed">-</span> <span class="unit">km/h</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- POPUP MODAL -->
+    <div id="popup-modal" class="hidden flex-center">
+        <div class="modal-content">
+            <div style="font-size:50px;">🚨</div>
+            <h3 id="modal-msg">DANGER</h3>
+            <p id="modal-time" style="color:#777; font-weight:bold;">--:--</p>
+            <button onclick="closeModal()">Κλείσιμο</button>
+        </div>
+    </div>
+
+    <!-- LOGIC -->
+    <script>
+        console.log("App Loaded: Fleet Mode");
+
+        let ws, map, marker;
+        let myRole = null;
+        let currentBus = "bus01"; // Το λεωφορείο που παρακολουθούμε τώρα
+        let activeAlerts = { accident: false, smoke: false };
+        let simInterval = null; // Για την προσομοίωση
+
+        const REAL_BUS_ID = "bus01";
+
+        // --- MAP INITIALIZATION ---
+        function initMap() {
+            if(map) return; 
+            map = L.map('map').setView([37.9838, 23.7275], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+            marker = L.marker([37.9838, 23.7275]).addTo(map);
+        }
+
+        function updateMap(lat, lon, isSim) {
+            const statusDiv = document.getElementById('gps-status');
+            
+            if(!isSim && (!map || (lat === 0 && lon === 0))) {
+                statusDiv.innerText = "GPS: Searching...";
+                statusDiv.style.color = "red";
+                return;
+            }
+
+            statusDiv.innerText = isSim ? "GPS: Προσομοίωση" : `GPS: OK (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+            statusDiv.style.color = "green";
+
+            const newLatLng = new L.LatLng(lat, lon);
+            marker.setLatLng(newLatLng);
+            map.panTo(newLatLng);
+        }
+
+        // --- LOGIN LOGIC ---
+        function login() {
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value.trim();
+
+            if (u === 'admin' && p === 'admin') {
+                // Admin: Πάει στη λίστα επιλογής
+                myRole = 'admin';
+                switchSection('fleet-section');
+            } 
+            else if (u === 'parent' && p === '1234') {
+                // Γονέας: Πάει κατευθείαν στο αληθινό λεωφορείο
+                myRole = 'parent';
+                selectBus('bus01');
+            } 
+            else {
+                alert('Λάθος στοιχεία!');
+            }
+        }
+
+        function logout() { location.reload(); }
+
+        function switchSection(id) {
+            ['login-section', 'fleet-section', 'dashboard'].forEach(s => document.getElementById(s).classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function goBack() {
+            // Κουμπί "Πίσω" μόνο για Admin
+            stopSimulation();
+            stopCamera();
+            if(ws) ws.close();
+            switchSection('fleet-section');
+        }
+
+        // --- BUS SELECTION (ADMIN) ---
+        function selectBus(busId) {
+            currentBus = busId;
+            document.getElementById('user-role').innerText = "Χρήστης: " + (myRole==='admin'?'Διαχειριστής':'Γονέας');
+            
+            // Εμφάνιση Dashboard
+            switchSection('dashboard');
+            
+            // Ρυθμίσεις εμφάνισης
+            document.getElementById('back-btn').style.display = (myRole === 'admin') ? 'block' : 'none';
+            document.getElementById('bus-label').innerText = (busId === 'bus01') ? "Live Bus 01" : `Simulated Bus ${busId.slice(-2)}`;
+            
+            // Καθαρισμός προηγούμενων
+            document.getElementById('log-list').innerHTML = '<div class="log-entry" style="color:#999; text-align:center;">Δεν υπάρχουν συμβάντα</div>';
+            resetSensors();
+            initMap();
+
+            // Λογική ανάλογα με το λεωφορείο
+            if (busId === REAL_BUS_ID) {
+                // Πραγματικό: Σύνδεση MQTT
+                startWebSocket();
+                if(myRole === 'admin') startCamera();
+            } else {
+                // Ψεύτικο: Έναρξη Προσομοίωσης
+                startSimulation();
+            }
+        }
+
+        function resetSensors() {
+            ['temp','hum','mq3','tilt','speed'].forEach(id => document.getElementById(id).innerText = "-");
+            document.getElementById('alerts').innerHTML = "";
+        }
+
+        // --- SIMULATION LOGIC (BUS 2 & 3) ---
+        function startSimulation() {
+            document.getElementById('connection-status').innerText = "🔵 Προσομοίωση";
+            document.getElementById('connection-status').style.color = "blue";
+            
+            // Τυχαία αρχική θέση (Αθήνα)
+            let simLat = 37.98 + (Math.random() - 0.5) * 0.05;
+            let simLon = 23.72 + (Math.random() - 0.5) * 0.05;
+
+            simInterval = setInterval(() => {
+                // Τυχαία κίνηση
+                simLat += (Math.random() - 0.5) * 0.001;
+                simLon += (Math.random() - 0.5) * 0.001;
+
+                const data = {
+                    temp: (22 + Math.random() * 3).toFixed(1),
+                    hum: (45 + Math.random() * 10).toFixed(0),
+                    mq3_raw: Math.floor(200 + Math.random() * 100), // Χαμηλές τιμές
+                    tilt_deg: (Math.random() * 2).toFixed(1),
+                    speed_kmh: (30 + Math.random() * 20).toFixed(0),
+                    lat: simLat, 
+                    lon: simLon
+                };
+                updateUI(data, {}, true); // true = isSim
+            }, 2000);
+        }
+
+        function stopSimulation() {
+            if(simInterval) clearInterval(simInterval);
+        }
+
+        // --- REAL BUS LOGIC ---
+        function startCamera() {
+            const ip = document.getElementById('esp-ip').value;
+            const img = document.getElementById('camera-stream');
+            if(ip.length < 7) { alert("Παρακαλώ ελέγξτε την IP"); return; }
+            img.src = `http://${ip}:81/stream`; img.style.display = 'block';
+            document.getElementById('cam-placeholder').style.display = 'none';
+        }
+
+        function stopCamera() {
+            const img = document.getElementById('camera-stream');
+            img.src = ""; img.style.display = 'none';
+            document.getElementById('cam-placeholder').style.display = 'block';
+        }
+
+        function startWebSocket() {
+            if(ws) ws.close();
+            let host = window.location.host || "localhost:3000";
+            ws = new WebSocket((location.protocol === 'https:' ? 'wss:' : 'ws:') + "//" + host);
+
+            ws.onopen = () => {
+                document.getElementById('connection-status').innerText = "🟢 Online";
+                document.getElementById('connection-status').style.color = "green";
+            };
+            ws.onclose = () => {
+                // Αν είμαστε ακόμα στο Bus 1, προσπάθησε ξανά
+                if(currentBus === REAL_BUS_ID) {
+                    document.getElementById('connection-status').innerText = "🔴 Disconnected";
+                    document.getElementById('connection-status').style.color = "red";
+                    setTimeout(startWebSocket, 3000);
+                }
+            };
+
+            ws.onmessage = (msg) => {
+                if(currentBus !== REAL_BUS_ID) return; // Μην δείχνεις δεδομένα αν βλέπουμε Sim
+                try {
+                    const d = JSON.parse(msg.data);
+                    if (d.busId === REAL_BUS_ID) {
+                        if (d.type === 'telemetry') updateUI(d.data, d.alerts || {}, false);
+                        if (d.type === 'event') {
+                            const evtType = d.data.type || "";
+                            if (evtType === "ACCIDENT_CANCELLED") {
+                                addToLog("🔘 Ο οδηγός ακύρωσε τον συναγερμό", "type-info");
+                                activeAlerts.accident = false;
+                                activeAlerts.smoke = false;
+                            } else if (evtType === "BUTTON_PRESS") {
+                                addToLog("🔵 Ο οδηγός πάτησε το κουμπί (Check)", "type-info");
+                            }
+                            updateUI(d.data, d.alerts || {}, false);
+                        }
+                    }
+                } catch(e) {}
+            };
+        }
+
+        // --- UI UPDATES ---
+        function updateUI(data, alerts, isSim) {
+            // Update Text Values
+            if(data.temp !== undefined) document.getElementById('temp').innerText = data.temp;
+            if(data.hum !== undefined) document.getElementById('hum').innerText = data.hum;
+            
+            // MQ-3 Logic (Ερμηνεία Τιμών)
+            if(data.mq3_raw !== undefined) {
+                const val = parseInt(data.mq3_raw);
+                document.getElementById('mq3').innerText = val;
+                
+                const txt = document.getElementById('mq3-text');
+                if (val < 1500) { txt.innerText = "Καθαρός Αέρας"; txt.style.color = "green"; }
+                else if (val < 2500) { txt.innerText = "Προειδοποίηση"; txt.style.color = "orange"; }
+                else { txt.innerText = "ΚΑΠΝΟΣ/ΑΛΚΟΟΛ!"; txt.style.color = "red"; }
+            }
+
+            if(data.tilt_deg !== undefined) document.getElementById('tilt').innerText = data.tilt_deg;
+            if(data.speed_kmh !== undefined) document.getElementById('speed').innerText = data.speed_kmh;
+
+            // Map
+            if(data.lat !== undefined && data.lon !== undefined) updateMap(data.lat, data.lon, isSim);
+
+            // Alerts (Μόνο για το πραγματικό λεωφορείο για να μην σπαμάρει το Sim)
+            if (!isSim) {
+                const alertBox = document.getElementById('alerts');
+                alertBox.innerHTML = '';
+                let safe = true;
+
+                if(alerts.accident) {
+                    safe = false;
+                    alertBox.innerHTML += `<div class="alert-box red">🚨 ΑΤΥΧΗΜΑ / ΑΝΑΤΡΟΠΗ!</div>`;
+                    if(!activeAlerts.accident) {
+                        showModal("🚨 ΑΝΙΧΝΕΥΘΗΚΕ ΑΤΥΧΗΜΑ!");
+                        addToLog("Ανιχνεύθηκε Ατύχημα (Tilt)", "type-danger");
+                        activeAlerts.accident = true;
+                    }
+                } else { activeAlerts.accident = false; }
+
+                if(alerts.smoke_alcohol) {
+                    safe = false;
+                    alertBox.innerHTML += `<div class="alert-box red">ΚΑΠΝΟΣ / ΑΛΚΟΟΛ!</div>`;
+                    if(!activeAlerts.smoke) {
+                        showModal(" ΠΡΟΣΟΧΗ: ΚΑΠΝΟΣ / ΑΛΚΟΟΛ");
+                        addToLog("Ανιχνεύθηκε Καπνός/Αλκοόλ", "type-warn");
+                        activeAlerts.smoke = true;
+                    }
+                } else { activeAlerts.smoke = false; }
+
+                if(safe) alertBox.innerHTML = `<div class="alert-box green">Κατάσταση: Φυσιολογική</div>`;
+            }
+        }
+
+        // --- HELPERS ---
+        function addToLog(msg, type) {
+            const list = document.getElementById('log-list');
+            if(list.children.length === 1 && list.children[0].innerText.includes("Δεν υπάρχουν")) list.innerHTML = "";
+            const time = new Date().toLocaleTimeString('el-GR');
+            const div = document.createElement('div');
+            div.className = `log-entry ${type}`;
+            div.innerHTML = `<b>${time}</b>: ${msg}`;
+            list.prepend(div);
+        }
+
+        function showModal(msg) {
+            const modal = document.getElementById('popup-modal');
+            document.getElementById('modal-msg').innerText = msg;
+            document.getElementById('modal-time').innerText = "Ώρα: " + new Date().toLocaleTimeString('el-GR');
+            modal.classList.remove('hidden'); modal.classList.add('flex-center');
+        }
+
+        function closeModal() {
+            document.getElementById('popup-modal').classList.add('hidden');
+            document.getElementById('popup-modal').classList.remove('flex-center');
+        }
+    </script>
+</body>
+</html>
